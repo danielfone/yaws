@@ -1854,6 +1854,7 @@ handle_request(CliSock, ARG, N) ->
 
 handle_normal_request(CliSock, ARG, UT = #urltype{type=error}, _, N) ->
     handle_ut(CliSock, ARG, UT, N);
+
 handle_normal_request(CliSock, ARG, UT, Authdirs, N) ->
     {IsAuth, ARG1} = case is_auth(ARG, Authdirs) of
                          {true, User} -> {true, set_auth_user(ARG, User)};
@@ -2171,7 +2172,9 @@ handle_ut(CliSock, ARG, UT = #urltype{type = regular}, _N) ->
 
     Regular_allowed   = ['GET', 'HEAD', 'OPTIONS'],
     IsReentrantRequest = erase(is_reentrant_request),
-    if
+    case H#headers.user_agent of
+       "Mozilla/5.0 (compatible; MSIE"++_ -> deliver_501(CliSock, Req);
+       _ -> if
         %% Do not check http method for reentrant requests
         IsReentrantRequest == true;
         Req#http_request.method == 'GET';
@@ -2255,7 +2258,8 @@ handle_ut(CliSock, ARG, UT = #urltype{type = regular}, _N) ->
             deliver_options(CliSock, Req, Regular_allowed);
         true ->
             deliver_405(CliSock, Req, Regular_allowed)
-    end;
+    end
+  end;
 
 
 handle_ut(CliSock, ARG, UT = #urltype{type = yaws}, N) ->
@@ -2264,7 +2268,9 @@ handle_ut(CliSock, ARG, UT = #urltype{type = yaws}, N) ->
 
     ?Debug("UT = ~s~n", [?format_record(UT, urltype)]),
     Yaws_allowed = ['GET', 'POST', 'HEAD', 'OPTIONS'],
-    if
+    case H#headers.user_agent of
+       (_++"MSIE"++_) -> deliver_501(CliSock, Req);
+       _ -> if
         Req#http_request.method == 'GET';
         Req#http_request.method == 'POST';
         Req#http_request.method == 'HEAD' ->
@@ -2275,6 +2281,7 @@ handle_ut(CliSock, ARG, UT = #urltype{type = yaws}, N) ->
             deliver_options(CliSock, Req, Yaws_allowed);
         true ->
             deliver_405(CliSock, Req, Yaws_allowed)
+        end
     end;
 
 handle_ut(CliSock, ARG, UT = #urltype{type = {unauthorized, Auth, Realm}}, N) ->
@@ -2338,7 +2345,9 @@ handle_ut(CliSock, ARG, UT = #urltype{type = directory}, N) ->
     H = ARG#arg.headers,
     SC=get(sc),
 
-    if (?sc_has_dir_listings(SC)) ->
+    case H#headers.user_agent of
+       "Mozilla/5.0 (compatible; MSIE"++_ -> deliver_501(CliSock, Req);
+       _ -> if (?sc_has_dir_listings(SC)) ->
             Directory_allowed = ['GET', 'HEAD', 'OPTIONS'],
             IsReentrantRequest = erase(is_reentrant_request),
             if
@@ -2359,6 +2368,7 @@ handle_ut(CliSock, ARG, UT = #urltype{type = directory}, N) ->
             end;
        true ->
             handle_ut(CliSock, ARG, #urltype{type = error}, N)
+      end
     end;
 
 
